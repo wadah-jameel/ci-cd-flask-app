@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Flask Chess: Pro Edition</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css">
+    <style>
+        body { 
+            font-family: 'Segoe UI', sans-serif; background-color: #1a1a2e; color: #e9e9e9;
+            display: flex; flex-direction: column; align-items: center; padding: 20px;
+        }
+        .game-container { display: flex; gap: 40px; margin-top: 20px; }
+        #board { width: 600px; border: 5px solid #16213e; border-radius: 4px; }
+        .info-panel {
+            background: #16213e; padding: 25px; border-radius: 12px; width: 280px;
+            display: flex; flex-direction: column; gap: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        .mode-selector { background: #0f3460; padding: 15px; border-radius: 8px; }
+        .player-box { padding: 12px; border-radius: 6px; background: #0f3460; text-align: center; border: 2px solid transparent; }
+        .active-turn { border-color: #e94560; background: #1a1a2e; }
+        select, button { 
+            width: 100%; padding: 12px; border-radius: 6px; border: none; 
+            font-weight: bold; cursor: pointer; margin-top: 5px;
+        }
+        select { background: #e9e9e9; color: #1a1a2e; }
+        button { background: #e94560; color: white; transition: 0.2s; }
+        button:hover { background: #ff4d6d; }
+        #status { color: #e94560; font-weight: bold; text-align: center; }
+    </style>
+</head>
+<body>
+    <h1>Chess: 2-Player & AI</h1>
+
+    <div class="game-container">
+        <div id="board"></div>
+
+        <div class="info-panel">
+            <div class="mode-selector">
+                <label><strong>Game Mode:</strong></label>
+                <select id="game-mode">
+                    <option value="pvp">Local 2-Player</option>
+                    <option value="ai">VS Random AI</option>
+                </select>
+            </div>
+
+            <div id="player2" class="player-box">
+                <span id="p2-label">Player 2 (Black)</span>
+            </div>
+
+            <div id="player1" class="player-box active-turn">
+                <span>Player 1 (White)</span>
+            </div>
+
+            <div style="text-align: center; font-size: 0.9em; opacity: 0.8;">
+                Current Turn: <span id="current-turn">White</span>
+            </div>
+            
+            <div id="status"></div>
+            <button onclick="resetGame()">Restart Game</button>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
+
+    <script>
+        var board = null;
+        var game = new Chess();
+
+        function onDrop(source, target) {
+            // Check if it's the right turn in AI mode (only let user move if White)
+            var mode = $('#game-mode').val();
+            if (mode === 'ai' && game.turn() === 'b') return 'snapback';
+
+            var move = game.move({ from: source, to: target, promotion: 'q' });
+            if (move === null) return 'snapback';
+
+            fetch('/move', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    move: source + target,
+                    mode: mode
+                })
+            })
+            .then(res => res.json())
+            .then(updateUI);
+        }
+
+        function updateUI(data) {
+            if (data.fen) {
+                game.load(data.fen);
+                board.position(data.fen);
+                
+                $('#current-turn').text(data.turn);
+                $('.player-box').removeClass('active-turn');
+                if (data.turn === 'White') $('#player1').addClass('active-turn');
+                else $('#player2').addClass('active-turn');
+
+                if (data.game_over) $('#status').text('GAME OVER: ' + data.status);
+            }
+        }
+
+        $('#game-mode').change(function() {
+            var mode = $(this).val();
+            $('#p2-label').text(mode === 'ai' ? 'Random AI (Black)' : 'Player 2 (Black)');
+            resetGame();
+        });
+
+        function resetGame() {
+            fetch('/reset', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                game.reset();
+                board.start();
+                updateUI({ fen: game.fen(), turn: 'White' });
+                $('#status').text('');
+            });
+        }
+
+        var config = {
+            draggable: true,
+            position: 'start',
+            onDrop: onDrop,
+            pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
+        };
+        board = Chessboard('board', config);
+    </script>
+</body>
+</html>
