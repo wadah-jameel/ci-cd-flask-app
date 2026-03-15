@@ -4,6 +4,13 @@ import random
 
 app = Flask(__name__)
 
+# ... your existing routes ...
+
+@app.route("/health")
+def health():
+    return jsonify({"status": "ok"}), 200
+
+
 # Global board state
 board = chess.Board()
 
